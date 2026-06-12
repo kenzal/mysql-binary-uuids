@@ -6,6 +6,7 @@ Store UUIDs and ULIDs as efficient binary(16) columns in MySQL instead of char(3
 [![Code Style](https://github.com/kenzal/mysql-binary-uuids/actions/workflows/code-style.yml/badge.svg)](https://github.com/kenzal/mysql-binary-uuids/actions/workflows/code-style.yml)
 [![PHP Version](https://img.shields.io/badge/php-8.2%20%7C%208.3%20%7C%208.4%20%7C%208.5-blue.svg)](https://php.net)
 [![Laravel Version](https://img.shields.io/badge/laravel-12%20%7C%2013-red.svg)](https://laravel.com)
+[![Packagist Version](https://img.shields.io/packagist/v/kenzal/mysql-binary-uuids)](https://packagist.org/packages/kenzal/mysql-binary-uuids)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ## Table of Contents
