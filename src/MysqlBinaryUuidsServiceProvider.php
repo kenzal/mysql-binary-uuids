@@ -2,14 +2,23 @@
 
 namespace Kenzal\MysqlBinaryUuids;
 
+use Illuminate\Database\Connection;
 use Illuminate\Database\Connectors\ConnectionFactory;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Schema\ColumnDefinition;
 use Illuminate\Support\ServiceProvider;
+use Kenzal\MysqlBinaryUuids\Connection\MySqlConnection;
 use Kenzal\MysqlBinaryUuids\Grammar\MySqlGrammar;
 
 class MysqlBinaryUuidsServiceProvider extends ServiceProvider
 {
+    public function register(): void
+    {
+        Connection::resolverFor('mysql', function ($connection, $database, $prefix, $config) {
+            return new MySqlConnection($connection, $database, $prefix, $config);
+        });
+    }
+
     public function boot(): void
     {
         $this->registerGrammar();

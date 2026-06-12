@@ -2,6 +2,7 @@
 
 namespace Kenzal\MysqlBinaryUuids\Concerns;
 
+use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUniqueStringIds;
 use Illuminate\Database\Eloquent\Model;
 use InvalidArgumentException;
@@ -22,6 +23,18 @@ trait HasBinaryUuids
         $this->usesUniqueIds = true;
 
         $this->mergeCasts($this->getBinaryUuidCasts());
+    }
+
+    public function getKeyType(): string
+    {
+        $uniqueIds = $this->uniqueIds();
+
+        if (in_array($this->getKeyName(), $uniqueIds)) {
+            return 'uuid';
+        }
+
+        /** @noinspection PhpUndefinedClassInspection */
+        return parent::getKeyType();
     }
 
     /**
@@ -117,5 +130,28 @@ trait HasBinaryUuids
         } catch (Throwable) {
             return false;
         }
+    }
+
+    public function resolveRouteBindingQuery($query, $value, $field = null): Builder
+    {
+        $field = $field ?? $this->getRouteKeyName();
+
+        if (is_string($value) && $this->hasBinaryUuidCast($field)) {
+            if (! $this->isValidUniqueId($value)) {
+                $this->handleInvalidUniqueId($value, $field);
+            }
+
+            $value = Uuid::fromString($value);
+        }
+
+        /** @noinspection PhpUndefinedClassInspection */
+        return parent::resolveRouteBindingQuery($query, $value, $field);
+    }
+
+    protected function hasBinaryUuidCast(string $field): bool
+    {
+        $cast = $this->getCasts()[$field] ?? null;
+
+        return $cast !== null && str_starts_with($cast, BinaryUuid::class);
     }
 }

@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-06-12
+
+### Added
+- **Connection-level binding conversion**: New `MySqlConnection::prepareBindings()` (registered via a connection resolver in the service provider) automatically converts `UuidInterface` and `Ulid` objects to binary bytes before querying. This ensures all query paths (`find`, `where`, subqueries) are handled uniformly at the connection layer.
+- **`getKeyType()` override**: Both traits now override `getKeyType()` to return `'uuid'` when the primary key is in `uniqueIds()`. This prevents `Eloquent\Builder::whereKey()` from stringifying UUID/ULID objects before they reach `prepareBindings()`.
+- **Cast-guarded route binding**: Both traits now override `resolveRouteBindingQuery()` to convert string route values to UUID/ULID objects before resolving. The conversion is guarded by a new `hasBinary{Uuid,Ulid}Cast()` check on the field's cast type, rather than relying on `uniqueIds()` membership.
+- **Tests**: Route-model binding tests (string, object, invalid), `find($uuidObject)`/`find($ulidObject)`, `find([...])` with object arrays, `findMany([...])`, and `find($string)` returning `null` — for both UUID and ULID traits.
+
+### Changed
+- Key type assertion in trait tests updated from `'string'` to `'uuid'` to match the new `getKeyType()` behavior.
+
 ## [1.0.1] - 2026-06-12
 
 ### Fixed
@@ -69,4 +80,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ramsey/uuid` - For UUID object handling (included with Laravel)
 - `symfony/uid` - For ULID object handling (included with Laravel)
 
+[1.1.0]: https://github.com/kenzal/mysql-binary-uuids/releases/tag/v1.1.0
 [1.0.0]: https://github.com/kenzal/mysql-binary-uuids/releases/tag/v1.0.0
