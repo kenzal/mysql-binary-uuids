@@ -1,0 +1,66 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        php: [8.2, 8.3, 8.4, 8.5]
+        laravel: [12, 13]
+        exclude:
+          - php: 8.2
+            laravel: 13
+
+    name: PHP ${{ matrix.php }} - Laravel ${{ matrix.laravel }}
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+          MYSQL_DATABASE: laravel_binary_uuids_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, pdo, pdo_mysql
+          ini-values: error_reporting=E_ALL
+          coverage: none
+
+      - name: Install Laravel ${{ matrix.laravel }} dependencies
+        run: |
+          if [ "${{ matrix.laravel }}" = "13" ]; then
+            composer require --dev \
+              orchestra/testbench:^11.0 \
+              pestphp/pest:^4.4 \
+              pestphp/pest-plugin-laravel:^4.1 \
+              --no-update --no-interaction
+          fi
+          composer update --prefer-dist --no-interaction
+
+      - name: Run tests
+        run: vendor/bin/pest --ci
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: ${{ job.services.mysql.ports[3306] }}
+          DB_DATABASE: laravel_binary_uuids_test
+          DB_USERNAME: root
+          DB_PASSWORD: ""

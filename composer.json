@@ -1,0 +1,49 @@
+{
+    "name": "kenzal/mysql-binary-uuids",
+    "description": "Store UUIDs and ULIDs as binary in MySQL for Laravel",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.2",
+        "illuminate/contracts": "^12.0|^13.0",
+        "illuminate/database": "^12.0|^13.0",
+        "ramsey/uuid": "^4.7",
+        "symfony/uid": "^7.2"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^10.0|^11.0",
+        "pestphp/pest": "^3.0|^4.4",
+        "pestphp/pest-plugin-laravel": "^3.2|^4.1",
+        "laravel/pint": "^1.29"
+    },
+    "autoload": {
+        "psr-4": {
+            "Kenzal\\MysqlBinaryUuids\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Kenzal\\MysqlBinaryUuids\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Kenzal\\MysqlBinaryUuids\\MysqlBinaryUuidsServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "stable",
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/pest",
+        "test:unit": "vendor/bin/pest --filter=Unit",
+        "test:feature": "vendor/bin/pest --filter=Feature",
+        "format": "vendor/bin/pint",
+        "format:test": "vendor/bin/pint --test"
+    }
+}
