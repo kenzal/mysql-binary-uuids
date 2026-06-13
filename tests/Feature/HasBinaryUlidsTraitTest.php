@@ -1,12 +1,15 @@
 <?php
 
 /**
- * @noinspection SqlResolve
- * @noinspection PhpUndefinedMethodInspection
  * @noinspection PhpExpressionAlwaysNullInspection
+ * @noinspection PhpPossiblePolymorphicInvocationInspection
+ * @noinspection PhpUndefinedMethodInspection
+ * @noinspection PhpUnusedLocalVariableInspection
+ * @noinspection SqlResolve
  */
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Kenzal\MysqlBinaryUuids\Concerns\HasBinaryUlids;
@@ -42,7 +45,7 @@ it('automatically generates a ULID for the primary key', function () {
     expect((string) $instance->id)->toMatch('/^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$/');
 });
 
-it('sets keyType to string for ULID columns', function () {
+it('sets keyType to uuid for ULID columns', function () {
     $model = new class extends Model
     {
         use HasBinaryUlids;
@@ -50,7 +53,7 @@ it('sets keyType to string for ULID columns', function () {
         protected $table = 'ulid_trait_models';
     };
 
-    expect($model->getKeyType())->toBe('string');
+    expect($model->getKeyType())->toBe('uuid');
 });
 
 it('sets incrementing to false for ULID columns', function () {
@@ -201,4 +204,129 @@ it('can use multiple ULID columns with ulidColumns method', function () {
     $instance = $model->create(['name' => 'Test']);
 
     expect($instance->id)->toBeInstanceOf(Ulid::class);
+});
+
+it('resolves route binding with a string ULID', function () {
+    $model = new class extends Model
+    {
+        use HasBinaryUlids;
+
+        protected $table = 'ulid_trait_models';
+
+        protected $fillable = ['name'];
+    };
+
+    $instance   = $model->create(['name' => 'Test']);
+    $ulidString = (string) $instance->id;
+
+    $found = $model->resolveRouteBinding($ulidString);
+
+    expect($found)->not->toBeNull();
+    expect((string) $found->id)->toBe($ulidString);
+});
+
+it('resolves route binding with a ULID object', function () {
+    $model = new class extends Model
+    {
+        use HasBinaryUlids;
+
+        protected $table = 'ulid_trait_models';
+
+        protected $fillable = ['name'];
+    };
+
+    $instance = $model->create(['name' => 'Test']);
+
+    $found = $model->resolveRouteBinding($instance->id);
+
+    expect($found)->not->toBeNull();
+    expect((string) $found->id)->toBe((string) $instance->id);
+});
+
+it('throws ModelNotFoundException for invalid route binding value', function () {
+    $model = new class extends Model
+    {
+        use HasBinaryUlids;
+
+        protected $table = 'ulid_trait_models';
+    };
+
+    $model->resolveRouteBinding('not-a-ulid');
+})->throws(ModelNotFoundException::class);
+
+it('finds a model by ULID object', function () {
+    $model = new class extends Model
+    {
+        use HasBinaryUlids;
+
+        protected $table = 'ulid_trait_models';
+
+        protected $fillable = ['name'];
+    };
+
+    $instance = $model->create(['name' => 'Test']);
+
+    $found = $model->find($instance->id);
+
+    expect($found)->not->toBeNull();
+    expect((string) $found->id)->toBe((string) $instance->id);
+});
+
+it('finds multiple models by an array of ULID objects', function () {
+    $model = new class extends Model
+    {
+        use HasBinaryUlids;
+
+        protected $table = 'ulid_trait_models';
+
+        protected $fillable = ['name'];
+    };
+
+    $a = $model->create(['name' => 'A']);
+    $b = $model->create(['name' => 'B']);
+    $c = $model->create(['name' => 'C']);
+
+    $results = $model->find([$a->id, $c->id]);
+
+    expect($results)->toHaveCount(2);
+    expect((string) $results->first()->id)->toBe((string) $a->id);
+    expect((string) $results->last()->id)->toBe((string) $c->id);
+});
+
+it('finds multiple models using findMany with ULID objects', function () {
+    $model = new class extends Model
+    {
+        use HasBinaryUlids;
+
+        protected $table = 'ulid_trait_models';
+
+        protected $fillable = ['name'];
+    };
+
+    $a = $model->create(['name' => 'A']);
+    $b = $model->create(['name' => 'B']);
+    $c = $model->create(['name' => 'C']);
+
+    $results = $model->findMany([$a->id, $b->id]);
+
+    expect($results)->toHaveCount(2);
+    expect((string) $results->first()->id)->toBe((string) $a->id);
+    expect((string) $results->last()->id)->toBe((string) $b->id);
+});
+
+it('cannot find a model by raw string ULID', function () {
+    $model = new class extends Model
+    {
+        use HasBinaryUlids;
+
+        protected $table = 'ulid_trait_models';
+
+        protected $fillable = ['name'];
+    };
+
+    $instance = $model->create(['name' => 'Test']);
+
+    $found = $model->find((string) $instance->id);
+
+    expect($found)->toBeNull();
 });

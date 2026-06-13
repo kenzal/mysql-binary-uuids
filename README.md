@@ -16,11 +16,11 @@ Store UUIDs and ULIDs as efficient binary(16) columns in MySQL instead of char(3
 - [Installation](#installation)
 - [Features](#features)
 - [Usage](#usage)
+- [Route Model Binding](#route-model-binding)
 - [API Reference](#api-reference)
 - [Testing](#testing)
 - [Performance Considerations](#performance-considerations)
 - [Compatibility](#compatibility)
-- [Upgrading from String UUIDs](#upgrading-from-string-uuids)
 - [Contributing](#contributing)
 - [Credits](#credits)
 
@@ -35,8 +35,8 @@ Storing UUIDs and ULIDs as binary data provides significant benefits:
 
 ### Storage Comparison
 
-| Type | String Storage | Binary Storage | Savings |
-|------|---------------|----------------|---------|
+| Type | String Storage  | Binary Storage    | Savings           |
+|------|-----------------|-------------------|-------------------|
 | UUID | 36 bytes (char) | 16 bytes (binary) | **56% reduction** |
 | ULID | 26 bytes (char) | 16 bytes (binary) | **38% reduction** |
 
@@ -50,8 +50,8 @@ Storing UUIDs and ULIDs as binary data provides significant benefits:
 
 | Laravel | PHP 8.2 | PHP 8.3 | PHP 8.4 | PHP 8.5 |
 |---------|---------|---------|---------|---------|
-| 12.x    | ✅      | ✅      | ✅      | ✅      |
-| 13.x    | ❌      | ✅      | ✅      | ✅      |
+| 12.x    | ✅       | ✅       | ✅       | ✅       |
+| 13.x    | ❌       | ✅       | ✅       | ✅       |
 
 ## Installation
 
@@ -62,6 +62,33 @@ composer require kenzal/mysql-binary-uuids
 ```
 
 The service provider will be automatically registered.
+
+> [!CAUTION]
+> **Upgrading from String (char) UUIDs**
+>
+> If you're migrating an existing project from `char(36)` or `varchar(36)` UUIDs to `binary(16)`:
+>
+> 1. Install this package
+> 2. Update your models to use the traits or casts
+> 3. [Create migrations to convert columns](#working-with-existing-data)
+> 4. **Plan for a breaking schema change** — test thoroughly in staging first
+>
+> **Key query change:** Binary(16) columns store UUIDs/ULIDs as raw bytes, not human-readable strings. When querying, you **must** pass `UuidInterface` or `Ulid` objects — raw strings will not be automatically converted to binary at the connection level:
+>
+> ```php
+> use Ramsey\Uuid\Uuid;
+>
+> // ✅ Query with objects
+> User::find($uuidObject);
+> User::find(Uuid::fromString($uuidString));
+> User::where('id', $uuidObject)->first();
+>
+> // ❌ Returns null — raw strings won't match binary(16)
+> User::find($uuidString);
+> User::where('id', $uuidString)->first();
+> ```
+>
+> [Route-model binding](#route-model-binding) is handled automatically — string UUIDs/ULIDs from URLs are converted to objects before querying.
 
 ## Features
 
@@ -414,6 +441,71 @@ return new class extends Migration
 };
 ```
 
+## Route Model Binding
+
+Binary UUID/ULID columns work seamlessly with Laravel's implicit and explicit route-model binding. The traits handle the conversion automatically — string UUIDs/ULIDs from URLs are converted to `UuidInterface`/`Ulid` objects before querying, and the connection handles the binary conversion.
+
+### Implicit Binding
+
+With traits, no additional configuration is needed:
+
+```php
+use Illuminate\Database\Eloquent\Model;
+use Kenzal\MysqlBinaryUuids\Concerns\HasBinaryUuids;
+
+class User extends Model
+{
+    use HasBinaryUuids;
+}
+
+// GET /users/550e8400-e29b-41d4-a716-446655440000
+Route::get('/users/{user}', function (User $user) {
+    return $user; // Resolved correctly from binary(16) column
+});
+```
+
+### Explicit Binding
+
+Works with casts too — register the binding in `AppServiceProvider`:
+
+```php
+use App\Models\Post;
+use Illuminate\Support\Facades\Route;
+use Ramsey\Uuid\Uuid;
+
+Route::bind('post', function (string $value) {
+    return Post::where('id', Uuid::fromString($value))->firstOrFail();
+});
+```
+
+Or use Laravel's `getRouteKeyName()` on the model.
+
+### Custom Route Key Names
+
+Override `getRouteKeyName()` to bind on a different binary UUID/ULID column:
+
+```php
+class Document extends Model
+{
+    use HasBinaryUuids;
+
+    public function uuidColumns(): array
+    {
+        return ['id', 'document_uuid'];
+    }
+
+    public function getRouteKeyName(): string
+    {
+        return 'document_uuid';
+    }
+}
+
+// GET /documents/550e8400-e29b-41d4-a716-446655440000
+Route::get('/documents/{document}', function (Document $document) {
+    return $document;
+});
+```
+
 ## API Reference
 
 ### Casts
@@ -461,8 +553,8 @@ Provides automatic UUID v7 generation with binary storage.
 **Features:**
 - Generates UUID v7 for new models
 - Applies `BinaryUuid` cast to `uuidColumns()` columns
-- Sets `$keyType = 'string'` and `$incrementing = false` (via `HasUniqueStringIds`)
-- Validates UUID format for route model binding
+- Sets `$keyType = 'uuid'` and `$incrementing = false` (via `HasUniqueStringIds`)
+- Route-model binding — resolves string UUID URLs against binary(16) columns
 
 **Methods:**
 - `newUniqueId()`: Generates a new UUID v7
@@ -477,8 +569,8 @@ Provides automatic ULID generation with binary storage.
 **Features:**
 - Generates ULIDs for new models
 - Applies `BinaryUlid` cast to `ulidColumns()` columns
-- Sets `$keyType = 'string'` and `$incrementing = false` (via `HasUniqueStringIds`)
-- Validates ULID format for route model binding
+- Sets `$keyType = 'uuid'` and `$incrementing = false` (via `HasUniqueStringIds`)
+- Route-model binding — resolves string ULID URLs against binary(16) columns
 - ULIDs are chronologically sortable
 
 **Methods:**
@@ -528,12 +620,17 @@ composer test -- --filter=HasBinaryUuids
 
 ### Query Performance
 
-Binary UUIDs maintain excellent query performance:
+Binary UUIDs maintain excellent query performance. When querying, pass `UuidInterface` or `Ulid` objects — the connection automatically converts them to binary:
 
 ```php
-// Both work efficiently with proper indexing
-$user = User::where('id', $uuid)->first();
-$user = User::find($uuid);
+use Ramsey\Uuid\Uuid;
+
+// Pass objects, not raw strings
+$user = User::where('id', Uuid::fromString($uuidString))->first();
+$user = User::find($uuidObject);
+
+// Raw strings won't match binary(16) columns
+User::find($uuidString); // null — use the object instead
 ```
 
 ### Index Recommendations
@@ -573,18 +670,6 @@ ULIDs are 128-bit identifiers:
 - 80-bit random component
 - Lexicographically sortable
 - Case-insensitive base32 encoding
-
-## Upgrading from String UUIDs
-
-If you're currently using `char(36)` or `varchar(36)` for UUIDs:
-
-1. Install this package
-2. Update your models to use the traits or casts
-3. Create migrations to convert columns (see "Working with Existing Data")
-4. Test thoroughly in a staging environment
-5. Deploy to production
-
-**Note:** This is a breaking change for your database schema. Plan accordingly.
 
 ## Contributing
 

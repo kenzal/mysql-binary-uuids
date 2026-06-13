@@ -1,12 +1,15 @@
 <?php
 
 /**
- * @noinspection SqlResolve
- * @noinspection PhpUndefinedMethodInspection
  * @noinspection PhpExpressionAlwaysNullInspection
+ * @noinspection PhpPossiblePolymorphicInvocationInspection
+ * @noinspection PhpUndefinedMethodInspection
+ * @noinspection PhpUnusedLocalVariableInspection
+ * @noinspection SqlResolve
  */
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Kenzal\MysqlBinaryUuids\Concerns\HasBinaryUuids;
@@ -43,7 +46,7 @@ it('automatically generates a UUID for the primary key', function () {
     expect($instance->id->toString())->toMatch('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/');
 });
 
-it('sets keyType to string for UUID columns', function () {
+it('sets keyType to uuid for UUID columns', function () {
     $model = new class extends Model
     {
         use HasBinaryUuids;
@@ -51,7 +54,7 @@ it('sets keyType to string for UUID columns', function () {
         protected $table = 'uuid_trait_models';
     };
 
-    expect($model->getKeyType())->toBe('string');
+    expect($model->getKeyType())->toBe('uuid');
 });
 
 it('sets incrementing to false for UUID columns', function () {
@@ -177,4 +180,129 @@ it('generates UUID v7 by default', function () {
     $versionNibble = hexdec($hex[12]);
 
     expect($versionNibble & 0xF0 >> 4)->toBe(7);
+});
+
+it('resolves route binding with a string UUID', function () {
+    $model = new class extends Model
+    {
+        use HasBinaryUuids;
+
+        protected $table = 'uuid_trait_models';
+
+        protected $fillable = ['name'];
+    };
+
+    $instance   = $model->create(['name' => 'Test']);
+    $uuidString = $instance->id->toString();
+
+    $found = $model->resolveRouteBinding($uuidString);
+
+    expect($found)->not->toBeNull();
+    expect($found->id->toString())->toBe($uuidString);
+});
+
+it('resolves route binding with a UUID object', function () {
+    $model = new class extends Model
+    {
+        use HasBinaryUuids;
+
+        protected $table = 'uuid_trait_models';
+
+        protected $fillable = ['name'];
+    };
+
+    $instance = $model->create(['name' => 'Test']);
+
+    $found = $model->resolveRouteBinding($instance->id);
+
+    expect($found)->not->toBeNull();
+    expect($found->id->toString())->toBe($instance->id->toString());
+});
+
+it('throws ModelNotFoundException for invalid route binding value', function () {
+    $model = new class extends Model
+    {
+        use HasBinaryUuids;
+
+        protected $table = 'uuid_trait_models';
+    };
+
+    $model->resolveRouteBinding('not-a-uuid');
+})->throws(ModelNotFoundException::class);
+
+it('finds a model by UUID object', function () {
+    $model = new class extends Model
+    {
+        use HasBinaryUuids;
+
+        protected $table = 'uuid_trait_models';
+
+        protected $fillable = ['name'];
+    };
+
+    $instance = $model->create(['name' => 'Test']);
+
+    $found = $model->find($instance->id);
+
+    expect($found)->not->toBeNull();
+    expect($found->id->toString())->toBe($instance->id->toString());
+});
+
+it('finds multiple models by an array of UUID objects', function () {
+    $model = new class extends Model
+    {
+        use HasBinaryUuids;
+
+        protected $table = 'uuid_trait_models';
+
+        protected $fillable = ['name'];
+    };
+
+    $a = $model->create(['name' => 'A']);
+    $b = $model->create(['name' => 'B']);
+    $c = $model->create(['name' => 'C']);
+
+    $results = $model->find([$a->id, $c->id]);
+
+    expect($results)->toHaveCount(2);
+    expect($results->first()->id->toString())->toBe($a->id->toString());
+    expect($results->last()->id->toString())->toBe($c->id->toString());
+});
+
+it('finds multiple models using findMany with UUID objects', function () {
+    $model = new class extends Model
+    {
+        use HasBinaryUuids;
+
+        protected $table = 'uuid_trait_models';
+
+        protected $fillable = ['name'];
+    };
+
+    $a = $model->create(['name' => 'A']);
+    $b = $model->create(['name' => 'B']);
+    $c = $model->create(['name' => 'C']);
+
+    $results = $model->findMany([$a->id, $b->id]);
+
+    expect($results)->toHaveCount(2);
+    expect($results->first()->id->toString())->toBe($a->id->toString());
+    expect($results->last()->id->toString())->toBe($b->id->toString());
+});
+
+it('cannot find a model by raw string UUID', function () {
+    $model = new class extends Model
+    {
+        use HasBinaryUuids;
+
+        protected $table = 'uuid_trait_models';
+
+        protected $fillable = ['name'];
+    };
+
+    $instance = $model->create(['name' => 'Test']);
+
+    $found = $model->find($instance->id->toString());
+
+    expect($found)->toBeNull();
 });
